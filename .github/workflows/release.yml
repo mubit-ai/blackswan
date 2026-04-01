@@ -1,0 +1,193 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Rust binaries ──────────────────────────────────────────
+  rust:
+    name: Rust - ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p blackswan
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../blackswan-${{ matrix.target }}.tar.gz libblackswan.* 2>/dev/null || true
+          cd ../../..
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../blackswan-${{ matrix.target }}.zip blackswan.lib blackswan.dll 2>$null; $true
+          cd ../../..
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ matrix.target }}
+          path: blackswan-${{ matrix.target }}.*
+
+  # ── Python wheels ──────────────────────────────────────────
+  python:
+    name: Python - ${{ matrix.target }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+          - os: ubuntu-latest
+            target: aarch64
+          - os: macos-latest
+            target: x86_64
+          - os: macos-latest
+            target: aarch64
+          - os: windows-latest
+            target: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          working-directory: bindings/python
+          manylinux: auto
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-${{ matrix.os }}-${{ matrix.target }}
+          path: bindings/python/dist/*.whl
+
+  # ── Node.js native modules ────────────────────────────────
+  node:
+    name: Node - ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            arch: arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.settings.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install dependencies
+        working-directory: bindings/node
+        run: npm install
+
+      - name: Build
+        working-directory: bindings/node
+        run: npx napi build --platform --release --target ${{ matrix.settings.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-${{ matrix.settings.target }}
+          path: bindings/node/blackswan.*.node
+
+  # ── Create GitHub Release ──────────────────────────────────
+  release:
+    name: Create Release
+    needs: [rust, python, node]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p release
+          # Rust
+          find artifacts/rust-* -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
+          # Python wheels
+          find artifacts/python-* -name '*.whl' -exec cp {} release/ \;
+          # Node native modules
+          for dir in artifacts/node-*; do
+            target=$(basename "$dir" | sed 's/node-//')
+            for f in "$dir"/*.node; do
+              [ -f "$f" ] && cp "$f" "release/blackswan.${target}.node"
+            done
+          done
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
