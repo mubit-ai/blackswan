@@ -25,3 +25,6 @@ bindings/node/artifacts/
 *.swo
 *~
 .DS_Store
+
+.env
+.env.local

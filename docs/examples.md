@@ -236,6 +236,43 @@ for entry in &manifest.entries {
 }
 ```
 
+## Python LangGraph Multiagent POC
+
+The Python binding now includes a runnable LangGraph proof of concept for a three-agent software team: planner, implementer, reviewer.
+
+The POC extras depend on LangGraph, which currently requires Python 3.10+.
+
+Required environment:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- Optional: `BLACKSWAN_POC_MEMORY_DIR`
+- Optional: `BLACKSWAN_POC_RUN_ID`
+
+From the repo root:
+
+```bash
+uv venv
+uv pip install -e "./bindings/python[poc,test]"
+export OPENAI_API_KEY="..."
+export OPENAI_MODEL="gpt-5-mini"
+uv run python examples/python/langgraph/langgraph_multiagent_poc.py \
+  --memory-dir ./.blackswan-poc
+```
+
+The run creates one shared memory directory plus one local memory directory per agent under:
+
+```text
+<memory-dir>/<run-id>/
+  shared/
+  agents/planner/
+  agents/implementer/
+  agents/reviewer/
+  summary.json
+```
+
+`summary.json` contains turn-by-turn recalled filenames, promoted shared memories, targeted feedback writes, manifest sizes, latency, and pass/fail scenario expectations. The example script also prints a condensed console summary.
+
 ## Custom Consolidation Schedule
 
 ```rust
