@@ -1,0 +1,29 @@
+{
+  "name": "blackswan",
+  "version": "0.1.0",
+  "description": "Persistent memory system for AI agents - Node.js bindings",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "blackswan",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build-debug": "napi build --platform"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ]
+}

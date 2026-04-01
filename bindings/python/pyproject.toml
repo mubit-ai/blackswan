@@ -1,0 +1,21 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "blackswan"
+version = "0.1.0"
+description = "Persistent memory system for AI agents"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+]
+
+[tool.maturin]
+features = []
+manifest-path = "Cargo.toml"
+module-name = "blackswan._native"
+python-source = "python"

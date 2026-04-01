@@ -1,0 +1,27 @@
+[workspace]
+members = [".", "bindings/python", "bindings/node"]
+resolver = "2"
+
+[package]
+name = "blackswan"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "A persistent memory system for AI agents — flat-file storage, background extraction, semantic recall, and automatic consolidation"
+license = "Apache-2.0"
+
+[dependencies]
+tokio = { version = "1", features = ["rt", "sync", "fs", "time", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
