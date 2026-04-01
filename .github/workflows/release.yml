@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── Rust libraries ─────────────────────────────────────────
   rust:
@@ -107,6 +110,7 @@ jobs:
           args: --release --out dist
           working-directory: bindings/python
           manylinux: auto
+          docker-options: ${{ matrix.target == 'aarch64' && runner.os == 'Linux' && '--platform linux/arm64' || '' }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -152,9 +156,11 @@ jobs:
         working-directory: bindings/node
         run: npm install
 
-      - name: Build
+      - name: Build native module
         working-directory: bindings/node
-        run: npx napi build --platform --release --target ${{ matrix.settings.target }}
+        shell: bash
+        run: |
+          npx napi build --cargo-cwd . --platform --release --target ${{ matrix.settings.target }} --output-dir .
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
