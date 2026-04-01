@@ -1,6 +1,5 @@
 use napi::threadsafe_function::ThreadsafeFunction;
 use blackswan::{LlmProvider, MemoryError, Message};
-use std::future::Future;
 
 /// Wraps a JS async function as a Rust LlmProvider.
 pub struct JsLlmProvider {
@@ -17,11 +16,12 @@ impl JsLlmProvider {
 }
 
 impl LlmProvider for JsLlmProvider {
+    #[allow(clippy::manual_async_fn)]
     fn complete(
         &self,
         messages: Vec<Message>,
         system: Option<String>,
-    ) -> impl Future<Output = Result<String, MemoryError>> + Send + '_ {
+    ) -> impl std::future::Future<Output = Result<String, MemoryError>> + Send + '_ {
         async move {
             let messages_json = serde_json::to_string(&messages).map_err(|e| {
                 MemoryError::LlmError {

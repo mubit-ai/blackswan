@@ -253,6 +253,7 @@ impl PyMemoryConfig {
         bare_mode=false,
         remote_mode=false,
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         memory_dir: String,
         max_index_lines: usize,
