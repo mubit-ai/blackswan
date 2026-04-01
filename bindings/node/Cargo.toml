@@ -8,6 +8,9 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+[build-dependencies]
+napi-build = "2"
+
 [dependencies]
 blackswan = { path = "../.." }
 napi = { version = "3", features = ["async", "tokio_rt", "napi6"] }

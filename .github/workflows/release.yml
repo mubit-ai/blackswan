@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  # ── Rust binaries ──────────────────────────────────────────
+  # ── Rust libraries ─────────────────────────────────────────
   rust:
     name: Rust - ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
@@ -48,16 +48,21 @@ jobs:
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../blackswan-${{ matrix.target }}.tar.gz libblackswan.* 2>/dev/null || true
-          cd ../../..
+          mkdir -p staging
+          find target/${{ matrix.target }}/release -maxdepth 1 \
+            \( -name '*.a' -o -name '*.so' -o -name '*.dylib' \) \
+            -exec cp {} staging/ \;
+          tar czf blackswan-${{ matrix.target }}.tar.gz -C staging .
 
       - name: Package (windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../blackswan-${{ matrix.target }}.zip blackswan.lib blackswan.dll 2>$null; $true
-          cd ../../..
+          New-Item -ItemType Directory -Force -Path staging
+          Get-ChildItem "target/${{ matrix.target }}/release" -File |
+            Where-Object { $_.Extension -in '.lib', '.dll' } |
+            Copy-Item -Destination staging/
+          Compress-Archive -Path staging/* -DestinationPath blackswan-${{ matrix.target }}.zip
 
       - uses: actions/upload-artifact@v4
         with:
@@ -89,6 +94,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up QEMU
+        if: matrix.target == 'aarch64' && runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -112,25 +123,20 @@ jobs:
         settings:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            arch: x64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            arch: arm64
           - os: macos-latest
             target: x86_64-apple-darwin
-            arch: x64
           - os: macos-latest
             target: aarch64-apple-darwin
-            arch: arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            arch: x64
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -152,15 +158,21 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
+      - name: List outputs
+        working-directory: bindings/node
+        shell: bash
+        run: ls -la *.node 2>/dev/null || echo "No .node files found"
+
       - uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.settings.target }}
-          path: bindings/node/blackswan.*.node
+          path: bindings/node/*.node
 
   # ── Create GitHub Release ──────────────────────────────────
   release:
     name: Create Release
     needs: [rust, python, node]
+    if: always() && needs.rust.result != 'cancelled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -173,16 +185,18 @@ jobs:
         run: |
           mkdir -p release
           # Rust
-          find artifacts/rust-* -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
+          find artifacts/rust-* -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \; 2>/dev/null || true
           # Python wheels
-          find artifacts/python-* -name '*.whl' -exec cp {} release/ \;
+          find artifacts/python-* -name '*.whl' -exec cp {} release/ \; 2>/dev/null || true
           # Node native modules
           for dir in artifacts/node-*; do
+            [ -d "$dir" ] || continue
             target=$(basename "$dir" | sed 's/node-//')
             for f in "$dir"/*.node; do
               [ -f "$f" ] && cp "$f" "release/blackswan.${target}.node"
             done
           done
+          echo "=== Release artifacts ==="
           ls -la release/
 
       - name: Create Release
