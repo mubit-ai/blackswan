@@ -160,7 +160,7 @@ jobs:
         working-directory: bindings/node
         shell: bash
         run: |
-          npx napi build --cargo-cwd . --platform --release --target ${{ matrix.settings.target }} --output-dir .
+          npx napi build --platform --release --target ${{ matrix.settings.target }} --output-dir .
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
